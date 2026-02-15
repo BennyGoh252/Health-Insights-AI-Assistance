@@ -1,5 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from fastapi import APIRouter, Header, Request, UploadFile, File, Form, HTTPException, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import Optional
 from api.models.responses import ChatResponse
 from app.state import State
@@ -7,11 +9,19 @@ from core.file_validators import FileValidator
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from agents.orchestrator import orchestrator
+from agents.followup_agent import followup_agent
 import app.nodes as nodes
-import logging  
+import logging
+from pathlib import Path
 
 logger = logging.getLogger("chat")
 router = APIRouter()
+
+@router.get("/test-followup")
+async def test_followup():
+    """Serve the HTML test page for followup endpoint"""
+    html_file = Path(__file__).parent.parent.parent / "test_followup.html"
+    return FileResponse(html_file)
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
@@ -111,6 +121,75 @@ async def chat(
         message=final_state.get("final_response"),
         has_active_analysis=bool(final_state.get("analysis_state"))
     )
+
+
+@router.post("/followup", response_model=ChatResponse)
+async def followup(
+    request: Request,
+    question: str = Form(..., description="Follow-up question from user"),
+    x_session_id: Optional[str] = Header(None)
+):
+    """
+    Handle follow-up questions about a previously analyzed document.
+    Requires a valid session_id and retrieves the analysis summary from session.
+    """
+    try:
+        # Get session manager
+        session_manager = request.app.state.session_manager
+        
+        # Retrieve or create session
+        session_data = await session_manager.get_or_create_session(x_session_id)
+        
+        if not session_data:
+            raise HTTPException(status_code=400, detail="Failed to create or retrieve session")
+        
+        current_session_id = session_data.get("session_id")
+        if not current_session_id:
+            raise HTTPException(status_code=400, detail="Invalid session data")
+        
+        logger.info(f"Follow-up request for session: {current_session_id}")
+        logger.info(f"Question: {question}")
+        
+        # Get analysis summary from session
+        analysis = session_data.get("analysis") or {}
+        summary = analysis.get("clinical_analysis", "No previous analysis available")
+        
+        # Prepare state for followup agent
+        followup_state = {
+            "session_id": current_session_id,
+            "summary": summary,
+            "user_question": question,
+            "chat_history": session_data.get("conversation_history", [])
+        }
+        
+        # Run followup agent
+        result_state = followup_agent(followup_state)
+        followup_answer = result_state.get("followup_answer", "Unable to process follow-up question")
+        
+        logger.info(f"Follow-up answer: {followup_answer}")
+        
+        # Update session with follow-up interaction
+        now = datetime.now(ZoneInfo("Asia/Singapore")).isoformat()
+        session_data["last_active"] = now
+        session_data["conversation_history"].append({
+            "timestamp": now,
+            "type": "followup",
+            "question": question,
+            "answer": followup_answer
+        })
+        
+        await session_manager.save_session(current_session_id, session_data)
+        
+        return ChatResponse(
+            message=followup_answer,
+            has_active_analysis=bool(analysis)
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in followup endpoint: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/health")

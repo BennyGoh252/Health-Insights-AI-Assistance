@@ -3,9 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from api.routes import chat
 from core.session import SessionManager
-from redis.asyncio import Redis
+from core.mock_redis import MockRedisClient
 from dotenv import load_dotenv
 import logging
+import os
 
 # Configure logging globally
 logging.basicConfig(
@@ -17,9 +18,18 @@ logger = logging.getLogger("main")
 # Lifespan context manager
 async def lifespan(app: FastAPI):
     # Startup
-
-    # Setup Redis client and session manager
-    redis_client = Redis.from_url("redis://localhost:6379", decode_responses=True)
+    
+    # Use mock Redis for development, real Redis for production
+    use_mock_redis = os.getenv("USE_MOCK_REDIS", "true").lower() == "true"
+    
+    if use_mock_redis:
+        logger.info("Using in-memory mock Redis for development")
+        redis_client = MockRedisClient()
+    else:
+        logger.info("Using real Redis at localhost:6379")
+        from redis.asyncio import Redis
+        redis_client = Redis.from_url("redis://localhost:6379", decode_responses=True)
+    
     app.state.session_manager = SessionManager(redis_client)
     
     # Override, so it would use your local .env file

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import TypedDict
 
 class State(BaseModel):
     # Core session info
@@ -30,3 +31,8 @@ class State(BaseModel):
 
     created_at: str = datetime.now(ZoneInfo("Asia/Singapore")).isoformat()
     last_updated: str = datetime.now(ZoneInfo("Asia/Singapore")).isoformat()
+
+class AgentState(TypedDict):
+    summary: str
+    user_question: str
+    followup_answer: str

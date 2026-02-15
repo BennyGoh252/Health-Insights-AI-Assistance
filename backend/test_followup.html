@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Followup Agent Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+            color: #666;
+        }
+        .loading.show {
+            display: block;
+        }
+        .response-section {
+            margin-top: 30px;
+            display: none;
+        }
+        .response-section.show {
+            display: block;
+        }
+        .response-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #333;
+        }
+        .success {
+            border-left: 4px solid #4CAF50;
+        }
+        .error {
+            border-left: 4px solid #f44336;
+            color: #f44336;
+        }
+        .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Health Insights - Followup Question Test</h1>
+        
+        <form id="followupForm">
+            <div class="form-group">
+                <label for="sessionId">Session ID:</label>
+                <input type="text" id="sessionId" name="sessionId" value="test-browser-001" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="question">Question:</label>
+                <textarea id="question" name="question" required>What does elevated cholesterol mean and what should I do about it?</textarea>
+            </div>
+            
+            <button type="submit" id="submitBtn">Send Question</button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <p>Loading... Please wait.</p>
+        </div>
+        
+        <div class="response-section" id="responseSection">
+            <h2>Response:</h2>
+            <div class="response-box" id="responseBox"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('followupForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const sessionId = document.getElementById('sessionId').value;
+            const question = document.getElementById('question').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const responseSection = document.getElementById('responseSection');
+            const responseBox = document.getElementById('responseBox');
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            loading.classList.add('show');
+            responseSection.classList.remove('show');
+            
+            try {
+                const formData = new FormData();
+                formData.append('question', question);
+                
+                const response = await fetch('/api/followup', {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-ID': sessionId
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                loading.classList.remove('show');
+                responseSection.classList.add('show');
+                
+                if (response.ok) {
+                    responseBox.className = 'response-box success';
+                    responseBox.innerHTML = `<div class="status">Status: ${response.status} OK</div><div class="status">Session: ${sessionId}</div><div>${data.message}</div>`;
+                } else {
+                    responseBox.className = 'response-box error';
+                    responseBox.innerHTML = `<div class="status">Error ${response.status}</div><div>${JSON.stringify(data, null, 2)}</div>`;
+                }
+            } catch (error) {
+                loading.classList.remove('show');
+                responseSection.classList.add('show');
+                responseBox.className = 'response-box error';
+                responseBox.innerHTML = `<div class="status">Network Error</div><div>${error.message}</div>`;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,5 +1,10 @@
 from typing import Optional, Tuple
-import magic
+
+try:
+    import magic
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
 
 class FileValidator:
     ALLOWED_EXTENSIONS = [".pdf"]
@@ -21,9 +26,14 @@ class FileValidator:
             return False, f"File type not supported. Allowed: {', '.join(FileValidator.ALLOWED_EXTENSIONS)}"
         
         # Check 3: MIME type (actual content, not just extension)
-        mime = magic.from_buffer(file_bytes, mime=True)
-        if mime not in FileValidator.ALLOWED_MIME_TYPES:
-            return False, f"Invalid file format. Detected: {mime}"
+        if HAS_MAGIC:
+            mime = magic.from_buffer(file_bytes, mime=True)
+            if mime not in FileValidator.ALLOWED_MIME_TYPES:
+                return False, f"Invalid file format. Detected: {mime}"
+        else:
+            # Fallback: Just check PDF magic bytes if magic not available
+            if not (file_bytes[:4] == b'%PDF'):
+                return False, "Invalid file format. Expected PDF magic bytes."
         
         # Check 4: Basic corruption check
         if len(file_bytes) < 100:  # Too small to be valid
